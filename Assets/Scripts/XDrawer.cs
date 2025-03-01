@@ -128,6 +128,10 @@ public class XDrawer : MonoBehaviour
         
         // İlk çizgiyi çiz
         line1.enabled = true;
+        
+        // Çizgi çizilirken ses çal
+        PlayDrawSound();
+        
         yield return StartCoroutine(DrawLine(line1, line1Start, line1End));
 
         // İki çizgi arası bekleme
@@ -135,13 +139,14 @@ public class XDrawer : MonoBehaviour
 
         // İkinci çizgiyi çiz
         line2.enabled = true;
+        
         yield return StartCoroutine(DrawLine(line2, line2Start, line2End));
 
-        // Çizim tamamlandı
+        // Çizim tamamlandı (tamamlanma sesi kaldırıldı, artık pattern bulunduğunda çalınacak)
         isDrawing = false;
         currentAnimation = null;
     }
-
+    
     /// <summary>
     /// Bir çizgiyi animasyonlu şekilde çizer
     /// </summary>
@@ -164,6 +169,28 @@ public class XDrawer : MonoBehaviour
         
         // Son pozisyonu garantile
         line.SetPosition(1, end);
+    }
+
+    /// <summary>
+    /// Çizgi çizme sesini çalar
+    /// </summary>
+    private void PlayDrawSound()
+    {
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayDrawSound();
+        }
+    }
+    
+    /// <summary>
+    /// X tamamlanma sesini çalar (artık kullanılmıyor, GridAnimator tarafından çalınıyor)
+    /// </summary>
+    private void PlayCompleteSound()
+    {
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayCompleteSound();
+        }
     }
 
     /// <summary>

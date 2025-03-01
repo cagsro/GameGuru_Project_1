@@ -44,6 +44,12 @@ public class GridManager : MonoBehaviour
         var (cellSize, spacing) = CalculateGridDimensions();
         var startPositions = CalculateStartPositions(cellSize, spacing);
 
+        // Grid oluşturma sesini çal (artan pitch ile)
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayGridCreateSoundWithPitch(gridSize * gridSize);
+        }
+
         for (int x = 0; x < gridSize; x++)
         {
             for (int y = 0; y < gridSize; y++)
@@ -199,24 +205,30 @@ public class GridManager : MonoBehaviour
                 }
             }
         }
-
+        
+        // Eşleşmiş hücreleri temizle
+        matchedCells.Clear();
+        matchCache.Clear();
+        
+        // Match sayacını sıfırla
+        matchCount = 0;
+        OnMatchCountChanged?.Invoke(matchCount);
+        
         // Kısa bir gecikme ile yeni grid'i oluştur
         DOVirtual.DelayedCall(0.5f, () => {
-            // Reset match count
-            matchCount = 0;
-            OnMatchCountChanged?.Invoke(matchCount);
+            // Eski grid'i tamamen temizle
+            foreach (Transform child in transform)
+            {
+                Destroy(child.gameObject);
+            }
             
-            // Eşleşmiş hücreleri temizle
-            matchedCells.Clear();
-            matchCache.Clear();
-
             // Get new size from input field
             if (int.TryParse(sizeInputField.text, out int newSize))
             {
                 gridSize = Mathf.Clamp(newSize, 3, 10); // Limit size between 3 and 10
             }
-
-            // Create new grid
+            
+            // Yeni grid oluştur
             CreateGrid();
         });
     }

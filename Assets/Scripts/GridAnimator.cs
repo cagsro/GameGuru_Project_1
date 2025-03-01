@@ -108,6 +108,12 @@ public class GridAnimator
         // Mevcut pattern'i vurgula
         var currentPattern = patterns[currentIndex];
         
+        // Her pattern için tamamlanma sesini çal
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayCompleteSound();
+        }
+        
         // Pattern'deki tüm hücreleri vurgula
         foreach (var pos in currentPattern)
         {
