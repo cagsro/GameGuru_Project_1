@@ -1,3 +1,4 @@
+using DG.Tweening;
 using UnityEngine;
 
 public class GridCell : MonoBehaviour
@@ -6,6 +7,8 @@ public class GridCell : MonoBehaviour
     private bool hasX = false;
     private Vector2Int gridPosition;
     private GridManager gridManager;
+
+    private Vector3 initScale;
 
     void Start()
     {
@@ -16,6 +19,7 @@ public class GridCell : MonoBehaviour
     {
         gridPosition = new Vector2Int(x, y);
         gridManager = manager;
+        initScale = transform.localScale;
     }
 
     private void OnMouseDown()
@@ -24,8 +28,15 @@ public class GridCell : MonoBehaviour
         {
             hasX = true;
             xDrawer.DrawX();
+            PunchAnim();
             gridManager.CheckConnectedCells(gridPosition.x, gridPosition.y);
         }
+    }
+    private void PunchAnim()
+    {
+        DOTween.Kill(transform);
+        transform.localScale = initScale;
+        transform.DOPunchScale(initScale * 0.1f, 0.3f, 0, 0);
     }
 
     public void RemoveX()

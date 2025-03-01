@@ -61,7 +61,8 @@ public class GridManager : MonoBehaviour
         float posY = start.startY - (y * (cellSize + spacing));
         Vector3 position = new Vector3(posX + cellSize/2f, posY - cellSize/2f, 0);
 
-        GameObject cellObj = Instantiate(cellPrefab, position, Quaternion.identity, transform);
+        float randomRotation = Random.Range(-2f, 2f);
+        GameObject cellObj = Instantiate(cellPrefab, position, Quaternion.Euler(0, 0, randomRotation), transform);
         cellObj.transform.localScale = new Vector3(cellSize, cellSize, 1);
 
         grid[x, y] = cellObj.GetComponent<GridCell>();
