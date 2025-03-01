@@ -1,12 +1,14 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using TMPro;
 
 public class GridManager : MonoBehaviour
 {
     [SerializeField] private Camera mainCam;
     [SerializeField] private GameObject cellPrefab;
     [SerializeField] private int gridSize = 5;
+    [SerializeField] private TMPro.TMP_InputField sizeInputField;
     
     private GridCell[,] grid;
     private readonly (int x, int y)[] directions = { (1,0), (-1,0), (0,1), (0,-1) };
@@ -16,13 +18,15 @@ public class GridManager : MonoBehaviour
         new[] { (1,0), (0,-1) },  // Sağ-Aşağı
         new[] { (-1,0), (0,-1) }  // Sol-Aşağı
     };
+    private int matchCount = 0;
+    public System.Action<int> OnMatchCountChanged;
     
     private void Start()
     {
         CreateGrid();
     }
 
-    private void CreateGrid()
+    public void CreateGrid()
     {
         grid = new GridCell[gridSize, gridSize];
         var (cellSize, spacing) = CalculateGridDimensions();
@@ -75,6 +79,7 @@ public class GridManager : MonoBehaviour
 
         var cellsToRemove = new HashSet<Vector2Int>();
         var startPoints = new List<Vector2Int>(5) { new Vector2Int(x, y) };
+        int foundMatches = 0;
         
         // Komşu noktaları ekle
         for (int i = 0; i < directions.Length; i++)
@@ -88,41 +93,113 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        // Her başlangıç noktası için şekilleri kontrol et
-        for (int i = 0; i < startPoints.Count; i++)
+        // Her başlangıç noktası için L şekillerini kontrol et
+        foreach (var point in startPoints)
         {
-            CheckPatterns(startPoints[i].x, startPoints[i].y, cellsToRemove);
+            int lShapeMatches = CheckPatterns(point.x, point.y, cellsToRemove);
+            if (lShapeMatches > 0)
+            {
+                foundMatches += lShapeMatches;
+            }
+        }
+
+        // Düz çizgileri de kontrol et
+        int straightMatches = CheckStraightLines(x, y, cellsToRemove);
+        if (straightMatches > 0)
+        {
+            foundMatches += straightMatches;
         }
 
         // İşaretli hücreleri sil
-        var positions = cellsToRemove.ToArray();
-        for (int i = 0; i < positions.Length; i++)
+        if (cellsToRemove.Count > 0)
         {
-            grid[positions[i].x, positions[i].y].RemoveX();
+            foreach (var pos in cellsToRemove)
+            {
+                if (grid[pos.x, pos.y] != null && grid[pos.x, pos.y].HasX)
+                {
+                    grid[pos.x, pos.y].RemoveX();
+                }
+            }
+
+            // Match count'u güncelle
+            if (foundMatches > 0)
+            {
+                matchCount += foundMatches;
+                OnMatchCountChanged?.Invoke(matchCount);
+            }
         }
     }
 
-    private void CheckPatterns(int x, int y, HashSet<Vector2Int> cellsToRemove)
+    private int CheckPatterns(int x, int y, HashSet<Vector2Int> cellsToRemove)
     {
-        CheckStraightLines(x, y, cellsToRemove);
-        CheckLShapes(x, y, cellsToRemove);
-    }
-
-    private void CheckStraightLines(int x, int y, HashSet<Vector2Int> cellsToRemove)
-    {
-        // Yatay ve dikey kontrol
-        for (int i = 0; i < 2; i++)
+        int matchesFound = 0;
+        
+        for (int i = 0; i < lShapes.Length; i++)
         {
-            bool isHorizontal = i == 0;
-            var line = GetLine(x, y, isHorizontal);
-            if (line.Count >= 3)
+            bool isValidShape = true;
+            var currentShape = new List<Vector2Int>();
+            currentShape.Add(new Vector2Int(x, y));
+
+            for (int j = 0; j < lShapes[i].Length; j++)
             {
-                for (int j = 0; j < line.Count; j++)
+                int newX = x + lShapes[i][j].x;
+                int newY = y + lShapes[i][j].y;
+
+                if (!IsValidPosition(newX, newY) || !grid[newX, newY].HasX)
                 {
-                    cellsToRemove.Add(line[j]);
+                    isValidShape = false;
+                    break;
+                }
+                currentShape.Add(new Vector2Int(newX, newY));
+            }
+
+            if (isValidShape)
+            {
+                matchesFound++;
+                foreach (var pos in currentShape)
+                {
+                    if (!cellsToRemove.Contains(pos))
+                    {
+                        cellsToRemove.Add(pos);
+                    }
                 }
             }
         }
+        
+        return matchesFound;
+    }
+
+    private int CheckStraightLines(int x, int y, HashSet<Vector2Int> cellsToRemove)
+    {
+        // Yatay kontrol
+        var horizontalLine = GetLine(x, y, true);
+        if (horizontalLine.Count >= 3)
+        {
+            foreach (var pos in horizontalLine)
+            {
+                if (!cellsToRemove.Contains(pos))
+                {
+                    cellsToRemove.Add(pos);
+                }
+            }
+            return 1;
+        }
+
+        // Yatay match bulunamadıysa dikey kontrol
+        var verticalLine = GetLine(x, y, false);
+        if (verticalLine.Count >= 3)
+        {
+            foreach (var pos in verticalLine)
+            {
+                if (!cellsToRemove.Contains(pos))
+                {
+                    cellsToRemove.Add(pos);
+                }
+            }
+            return 1;
+        }
+
+        return 0;
     }
 
     private List<Vector2Int> GetLine(int x, int y, bool isHorizontal)
@@ -151,30 +228,39 @@ public class GridManager : MonoBehaviour
         return line;
     }
 
-    private void CheckLShapes(int x, int y, HashSet<Vector2Int> cellsToRemove)
-    {
-        if (!grid[x, y].HasX) return;
-
-        for (int i = 0; i < lShapes.Length; i++)
-        {
-            var shape = lShapes[i];
-            int x1 = x + shape[0].x;
-            int y1 = y + shape[0].y;
-            int x2 = x + shape[1].x;
-            int y2 = y + shape[1].y;
-
-            if (IsValidPosition(x1, y1) && IsValidPosition(x2, y2) && 
-                grid[x1, y1].HasX && grid[x2, y2].HasX)
-            {
-                cellsToRemove.Add(new Vector2Int(x, y));
-                cellsToRemove.Add(new Vector2Int(x1, y1));
-                cellsToRemove.Add(new Vector2Int(x2, y2));
-            }
-        }
-    }
-
     private bool IsValidPosition(int x, int y)
     {
         return x >= 0 && x < gridSize && y >= 0 && y < gridSize;
+    }
+
+    public void ResetGrid()
+    {
+        // Destroy all existing cells
+        if (grid != null)
+        {
+            for (int x = 0; x < grid.GetLength(0); x++)
+            {
+                for (int y = 0; y < grid.GetLength(1); y++)
+                {
+                    if (grid[x, y] != null)
+                    {
+                        Destroy(grid[x, y].gameObject);
+                    }
+                }
+            }
+        }
+
+        // Reset match count
+        matchCount = 0;
+        OnMatchCountChanged?.Invoke(matchCount);
+
+        // Get new size from input field
+        if (int.TryParse(sizeInputField.text, out int newSize))
+        {
+            gridSize = Mathf.Clamp(newSize, 3, 10); // Limit size between 3 and 10
+        }
+
+        // Create new grid
+        CreateGrid();
     }
 }
