@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
+using DG.Tweening;
 
 public class GridManager : MonoBehaviour
 {
@@ -67,7 +68,31 @@ public class GridManager : MonoBehaviour
 
         float randomRotation = Random.Range(-2f, 2f);
         GameObject cellObj = Instantiate(cellPrefab, position, Quaternion.Euler(0, 0, randomRotation), transform);
-        cellObj.transform.localScale = new Vector3(cellSize, cellSize, 1);
+        cellObj.transform.localScale = Vector3.zero;
+
+        // Görünmez başla
+        var cellRenderer = cellObj.GetComponent<SpriteRenderer>();
+        if (cellRenderer != null)
+        {
+            Color startColor = cellRenderer.color;
+            startColor.a = 0f;
+            cellRenderer.color = startColor;
+        }
+
+        // Animasyon gecikmesi hesapla (soldan sağa ve yukarıdan aşağıya doğru artan gecikme)
+        float delay = (x + y) * 0.05f;
+
+        // Scale ve fade animasyonları
+        cellObj.transform.DOScale(new Vector3(cellSize, cellSize, 1), 0.3f)
+            .SetDelay(delay)
+            .SetEase(Ease.OutBack);
+
+        if (cellRenderer != null)
+        {
+            cellRenderer.DOFade(1f, 0.3f)
+                .SetDelay(delay)
+                .SetEase(Ease.OutCubic);
+        }
 
         grid[x, y] = cellObj.GetComponent<GridCell>();
         grid[x, y].Initialize(x, y, this);
@@ -235,7 +260,7 @@ public class GridManager : MonoBehaviour
 
     public void ResetGrid()
     {
-        // Destroy all existing cells
+        // Önce tüm hücreleri fade-out ile sil
         if (grid != null)
         {
             for (int x = 0; x < grid.GetLength(0); x++)
@@ -244,23 +269,38 @@ public class GridManager : MonoBehaviour
                 {
                     if (grid[x, y] != null)
                     {
-                        Destroy(grid[x, y].gameObject);
+                        var cell = grid[x, y];
+                        var cellRenderer = cell.GetComponent<SpriteRenderer>();
+                        float delay = (x + y) * 0.02f;
+
+                        // Fade-out ve scale animasyonu
+                        if (cellRenderer != null)
+                        {
+                            cellRenderer.DOFade(0f, 0.2f).SetDelay(delay);
+                        }
+                        
+                        cell.transform.DOScale(Vector3.zero, 0.2f)
+                            .SetDelay(delay)
+                            .OnComplete(() => Destroy(cell.gameObject));
                     }
                 }
             }
         }
 
-        // Reset match count
-        matchCount = 0;
-        OnMatchCountChanged?.Invoke(matchCount);
+        // Kısa bir gecikme ile yeni grid'i oluştur
+        DOVirtual.DelayedCall(0.5f, () => {
+            // Reset match count
+            matchCount = 0;
+            OnMatchCountChanged?.Invoke(matchCount);
 
-        // Get new size from input field
-        if (int.TryParse(sizeInputField.text, out int newSize))
-        {
-            gridSize = Mathf.Clamp(newSize, 3, 10); // Limit size between 3 and 10
-        }
+            // Get new size from input field
+            if (int.TryParse(sizeInputField.text, out int newSize))
+            {
+                gridSize = Mathf.Clamp(newSize, 3, 10); // Limit size between 3 and 10
+            }
 
-        // Create new grid
-        CreateGrid();
+            // Create new grid
+            CreateGrid();
+        });
     }
 }
