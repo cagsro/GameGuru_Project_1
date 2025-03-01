@@ -81,9 +81,16 @@ public class GridManager : MonoBehaviour
 
         // Animasyon gecikmesi hesapla (soldan sağa ve yukarıdan aşağıya doğru artan gecikme)
         float delay = (x + y) * 0.05f;
+        
+        // Hücre bileşenini al
+        grid[x, y] = cellObj.GetComponent<GridCell>();
+        grid[x, y].Initialize(x, y, this);
+        
+        // Hedef scale değeri
+        Vector3 targetScale = new Vector3(cellSize, cellSize, 1);
 
         // Scale ve fade animasyonları
-        cellObj.transform.DOScale(new Vector3(cellSize, cellSize, 1), 0.3f)
+        cellObj.transform.DOScale(targetScale, 0.3f)
             .SetDelay(delay)
             .SetEase(Ease.OutBack);
 
@@ -93,9 +100,6 @@ public class GridManager : MonoBehaviour
                 .SetDelay(delay)
                 .SetEase(Ease.OutCubic);
         }
-
-        grid[x, y] = cellObj.GetComponent<GridCell>();
-        grid[x, y].Initialize(x, y, this);
     }
 
     public void CheckConnectedCells(int x, int y)
@@ -105,6 +109,9 @@ public class GridManager : MonoBehaviour
         var cellsToRemove = new HashSet<Vector2Int>();
         var startPoints = new List<Vector2Int>(5) { new Vector2Int(x, y) };
         int foundMatches = 0;
+        
+        // Tüm pattern'leri saklamak için liste
+        var allPatterns = new List<List<Vector2Int>>();
         
         // Komşu noktaları ekle
         for (int i = 0; i < directions.Length; i++)
@@ -121,43 +128,70 @@ public class GridManager : MonoBehaviour
         // Her başlangıç noktası için L şekillerini kontrol et
         foreach (var point in startPoints)
         {
-            int lShapeMatches = CheckPatterns(point.x, point.y, cellsToRemove);
-            if (lShapeMatches > 0)
+            var lShapePatterns = CheckPatternsWithList(point.x, point.y);
+            if (lShapePatterns.Count > 0)
             {
-                foundMatches += lShapeMatches;
+                foundMatches += lShapePatterns.Count;
+                allPatterns.AddRange(lShapePatterns);
+                
+                // Tüm pattern'lerdeki hücreleri silme listesine ekle
+                foreach (var pattern in lShapePatterns)
+                {
+                    foreach (var pos in pattern)
+                    {
+                        if (!cellsToRemove.Contains(pos))
+                        {
+                            cellsToRemove.Add(pos);
+                        }
+                    }
+                }
             }
         }
 
         // Düz çizgileri de kontrol et
-        int straightMatches = CheckStraightLines(x, y, cellsToRemove);
-        if (straightMatches > 0)
+        var straightPattern = CheckStraightLinesWithList(x, y);
+        if (straightPattern.Count > 0)
         {
-            foundMatches += straightMatches;
-        }
-
-        // İşaretli hücreleri sil
-        if (cellsToRemove.Count > 0)
-        {
-            foreach (var pos in cellsToRemove)
+            foundMatches += 1;
+            allPatterns.Add(straightPattern);
+            
+            // Düz çizgi pattern'indeki hücreleri silme listesine ekle
+            foreach (var pos in straightPattern)
             {
-                if (grid[pos.x, pos.y] != null && grid[pos.x, pos.y].HasX)
+                if (!cellsToRemove.Contains(pos))
                 {
-                    grid[pos.x, pos.y].RemoveX();
+                    cellsToRemove.Add(pos);
                 }
             }
+        }
 
-            // Match count'u güncelle
-            if (foundMatches > 0)
-            {
-                matchCount += foundMatches;
-                OnMatchCountChanged?.Invoke(matchCount);
-            }
+        // İşaretli hücreleri silmeden önce pattern'leri sırayla vurgula
+        if (allPatterns.Count > 0)
+        {
+            // Önce pattern'leri sırayla vurgula, sonra hücreleri sil
+            HighlightPatternsSequentially(allPatterns, () => {
+                // Vurgulama tamamlandıktan sonra hücreleri sil
+                foreach (var pos in cellsToRemove)
+                {
+                    if (grid[pos.x, pos.y] != null && grid[pos.x, pos.y].HasX)
+                    {
+                        grid[pos.x, pos.y].RemoveX();
+                    }
+                }
+
+                // Match count'u güncelle
+                if (foundMatches > 0)
+                {
+                    matchCount += foundMatches;
+                    OnMatchCountChanged?.Invoke(matchCount);
+                }
+            });
         }
     }
 
-    private int CheckPatterns(int x, int y, HashSet<Vector2Int> cellsToRemove)
+    private List<List<Vector2Int>> CheckPatternsWithList(int x, int y)
     {
-        int matchesFound = 0;
+        var matchedPatterns = new List<List<Vector2Int>>();
         
         for (int i = 0; i < lShapes.Length; i++)
         {
@@ -180,51 +214,77 @@ public class GridManager : MonoBehaviour
 
             if (isValidShape)
             {
-                matchesFound++;
-                foreach (var pos in currentShape)
-                {
-                    if (!cellsToRemove.Contains(pos))
-                    {
-                        cellsToRemove.Add(pos);
-                    }
-                }
+                matchedPatterns.Add(currentShape);
             }
         }
         
-        return matchesFound;
+        return matchedPatterns;
     }
 
-    private int CheckStraightLines(int x, int y, HashSet<Vector2Int> cellsToRemove)
+    private List<Vector2Int> CheckStraightLinesWithList(int x, int y)
     {
         // Yatay kontrol
         var horizontalLine = GetLine(x, y, true);
         if (horizontalLine.Count >= 3)
         {
-            foreach (var pos in horizontalLine)
-            {
-                if (!cellsToRemove.Contains(pos))
-                {
-                    cellsToRemove.Add(pos);
-                }
-            }
-            return 1;
+            return horizontalLine;
         }
 
         // Yatay match bulunamadıysa dikey kontrol
         var verticalLine = GetLine(x, y, false);
         if (verticalLine.Count >= 3)
         {
-            foreach (var pos in verticalLine)
-            {
-                if (!cellsToRemove.Contains(pos))
-                {
-                    cellsToRemove.Add(pos);
-                }
-            }
-            return 1;
+            return verticalLine;
         }
 
-        return 0;
+        return new List<Vector2Int>();
+    }
+    
+    private void HighlightPatternsSequentially(List<List<Vector2Int>> patterns, System.Action onComplete)
+    {
+        // Eğer pattern yoksa direkt tamamla
+        if (patterns.Count == 0)
+        {
+            onComplete?.Invoke();
+            return;
+        }
+        
+        // Her pattern için animasyon süresi ve aralarındaki gecikme
+        float animDuration = 0.3f;
+        float delayBetweenPatterns = 0.2f;
+        
+        // Sırayla pattern'leri vurgula
+        DOVirtual.DelayedCall(0.1f, () => {
+            HighlightPatternSequence(patterns, 0, animDuration, delayBetweenPatterns, onComplete);
+        });
+    }
+    
+    private void HighlightPatternSequence(List<List<Vector2Int>> patterns, int currentIndex, float animDuration, float delay, System.Action onComplete)
+    {
+        // Tüm pattern'ler tamamlandıysa bitir
+        if (currentIndex >= patterns.Count)
+        {
+            onComplete?.Invoke();
+            return;
+        }
+        
+        // Mevcut pattern'i vurgula
+        var currentPattern = patterns[currentIndex];
+        
+        // Pattern'deki tüm hücreleri vurgula
+        foreach (var pos in currentPattern)
+        {
+            if (IsValidPosition(pos.x, pos.y) && grid[pos.x, pos.y] != null)
+            {
+                // X işaretine punch animasyonu uygula
+                grid[pos.x, pos.y].PunchAnim();
+            }
+        }
+        
+        // Sonraki pattern'e geç
+        DOVirtual.DelayedCall(animDuration + delay, () => {
+            HighlightPatternSequence(patterns, currentIndex + 1, animDuration, delay, onComplete);
+        });
     }
 
     private List<Vector2Int> GetLine(int x, int y, bool isHorizontal)

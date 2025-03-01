@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using DG.Tweening;
 
 public class XDrawer : MonoBehaviour
 {
@@ -13,8 +14,17 @@ public class XDrawer : MonoBehaviour
     [Header("Animation Settings")]
     [SerializeField] private float delayBetweenLines = 0.1f;
     [SerializeField] private AnimationCurve drawCurve = AnimationCurve.Linear(0, 0, 1, 1);
+    
+    [Header("Highlight Settings")]
+    [SerializeField] private Color highlightColor = Color.yellow;
+    [SerializeField] private float blinkDuration = 0.3f;
+    [SerializeField] private int blinkCount = 2;
+    [SerializeField] private Ease blinkEase = Ease.InOutSine;
+    [SerializeField] private bool useFlashEffect = true;
 
     private Coroutine currentAnimation;
+    private Coroutine currentBlinkAnimation;
+    private Color originalColor;
 
     void Start()
     {
@@ -54,7 +64,7 @@ public class XDrawer : MonoBehaviour
         StopCurrentAnimation();
         currentAnimation = StartCoroutine(AnimateX());
     }
-
+    
     private void StopCurrentAnimation()
     {
         if (currentAnimation != null)
@@ -137,15 +147,139 @@ public class XDrawer : MonoBehaviour
         lineColor = newColor;
         if (line1 != null && line2 != null)
         {
-            line1.material.color = newColor;
-            line2.material.color = newColor;
-            
             // Gradient'i güncelle
             Gradient gradient = new Gradient();
             gradient.SetKeys(
                 new GradientColorKey[] { new GradientColorKey(newColor, 0.0f), new GradientColorKey(newColor, 1.0f) },
                 new GradientAlphaKey[] { new GradientAlphaKey(1.0f, 0.0f), new GradientAlphaKey(1.0f, 1.0f) }
             );
+            
+            line1.colorGradient = gradient;
+            line2.colorGradient = gradient;
+        }
+    }
+
+    public void BlinkHighlight()
+    {
+        // Eğer önceki blink animasyonu varsa durdur
+        StopBlinkAnimation();
+        
+        // Orijinal rengi kaydet
+        originalColor = lineColor;
+        
+        // Blink animasyonunu başlat
+        currentBlinkAnimation = StartCoroutine(BlinkAnimation());
+    }
+    
+    private void StopBlinkAnimation()
+    {
+        if (currentBlinkAnimation != null)
+        {
+            StopCoroutine(currentBlinkAnimation);
+            currentBlinkAnimation = null;
+        }
+    }
+    
+    private IEnumerator BlinkAnimation()
+    {
+        Sequence blinkSequence = DOTween.Sequence();
+        
+        for (int i = 0; i < blinkCount; i++)
+        {
+            // Geçici bir renk değişkeni oluştur
+            Color currentColor = originalColor;
+            
+            // Orijinal renkten highlight rengine
+            blinkSequence.Append(
+                DOTween.To(
+                    () => currentColor,
+                    color => {
+                        currentColor = color;
+                        UpdateLineColors(color);
+                    },
+                    highlightColor,
+                    blinkDuration / 2
+                ).SetEase(blinkEase)
+            );
+            
+            // Highlight renginden orijinal renge
+            blinkSequence.Append(
+                DOTween.To(
+                    () => currentColor,
+                    color => {
+                        currentColor = color;
+                        UpdateLineColors(color);
+                    },
+                    originalColor,
+                    blinkDuration / 2
+                ).SetEase(blinkEase)
+            );
+            
+            // Eğer flash efekti kullanılıyorsa, çizgilerin genişliğini de animasyonla değiştir
+            if (useFlashEffect && line1 != null && line2 != null)
+            {
+                // Çizgi genişliğini kaydet
+                float originalWidth = line1.startWidth;
+                
+                // Genişliği artır
+                blinkSequence.Join(
+                    DOTween.To(
+                        () => line1.startWidth,
+                        width => {
+                            line1.startWidth = width;
+                            line1.endWidth = width;
+                            line2.startWidth = width;
+                            line2.endWidth = width;
+                        },
+                        originalWidth * 1.5f,
+                        blinkDuration / 2
+                    ).SetEase(blinkEase)
+                );
+                
+                // Genişliği orijinal değerine geri getir
+                blinkSequence.Join(
+                    DOTween.To(
+                        () => line1.startWidth,
+                        width => {
+                            line1.startWidth = width;
+                            line1.endWidth = width;
+                            line2.startWidth = width;
+                            line2.endWidth = width;
+                        },
+                        originalWidth,
+                        blinkDuration / 2
+                    ).SetEase(blinkEase).SetDelay(blinkDuration / 2)
+                );
+            }
+        }
+        
+        // Sequence tamamlanana kadar bekle
+        yield return blinkSequence.WaitForCompletion();
+        
+        // Son olarak orijinal renge dön ve çizgi genişliğini sıfırla
+        UpdateLineColors(originalColor);
+        if (useFlashEffect && line1 != null && line2 != null)
+        {
+            line1.startWidth = lineWidth;
+            line1.endWidth = lineWidth;
+            line2.startWidth = lineWidth;
+            line2.endWidth = lineWidth;
+        }
+        
+        currentBlinkAnimation = null;
+    }
+    
+    private void UpdateLineColors(Color newColor)
+    {
+        if (line1 != null && line2 != null)
+        {
+            // Gradient'i güncelle
+            Gradient gradient = new Gradient();
+            gradient.SetKeys(
+                new GradientColorKey[] { new GradientColorKey(newColor, 0.0f), new GradientColorKey(newColor, 1.0f) },
+                new GradientAlphaKey[] { new GradientAlphaKey(1.0f, 0.0f), new GradientAlphaKey(1.0f, 1.0f) }
+            );
+            
             line1.colorGradient = gradient;
             line2.colorGradient = gradient;
         }

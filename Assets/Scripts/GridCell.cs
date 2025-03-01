@@ -1,14 +1,14 @@
 using DG.Tweening;
+using System.Collections;
 using UnityEngine;
 
 public class GridCell : MonoBehaviour
 {
     [SerializeField] private XDrawer xDrawer;
+    [SerializeField] private Transform XPivot;
     private bool hasX = false;
     private Vector2Int gridPosition;
     private GridManager gridManager;
-
-    private Vector3 initScale;
 
     void Start()
     {
@@ -19,24 +19,53 @@ public class GridCell : MonoBehaviour
     {
         gridPosition = new Vector2Int(x, y);
         gridManager = manager;
-        initScale = transform.localScale;
     }
-
+    
     private void OnMouseDown()
     {
         if (!hasX)
         {
             hasX = true;
             xDrawer.DrawX();
-            PunchAnim();
-            gridManager.CheckConnectedCells(gridPosition.x, gridPosition.y);
+            StartCoroutine(WaitForXDrawAndCheck());
         }
     }
-    private void PunchAnim()
+    
+    public IEnumerator WaitForXDrawAndCheck()
     {
-        DOTween.Kill(transform);
-        transform.localScale = initScale;
-        transform.DOPunchScale(initScale * 0.1f, 0.3f, 0, 0);
+        // X çiziminin tamamlanması için yaklaşık süre (iki çizgi + aralarındaki bekleme)
+        float drawTime = 0.5f;
+        yield return new WaitForSeconds(drawTime);
+        
+        // X çizimi tamamlandıktan sonra punch animasyonu yap
+        //PunchAnim();
+        
+        // Pattern kontrolünü başlat
+        gridManager.CheckConnectedCells(gridPosition.x, gridPosition.y);
+    }
+
+    public void PunchAnim()
+    {
+        // Eğer XPivot yoksa işlem yapma
+        if (XPivot == null) return;
+        
+        // X işaretinin pivot objesini punch scale et
+        DOTween.Kill(XPivot);
+        
+        // Başlangıç scale değerini kaydet
+        Vector3 xInitScale = XPivot.localScale;
+        
+        // Punch animasyonu uygula
+        XPivot.DOPunchScale(xInitScale * 0.5f, 0.3f, 0, 0).OnComplete(() => {
+            // Animasyon bitiminde orijinal scale'e geri dön
+            XPivot.localScale = xInitScale;
+        });
+        
+        // Aynı zamanda blink efekti uygula
+        if (xDrawer != null)
+        {
+            xDrawer.BlinkHighlight();
+        }
     }
 
     public void RemoveX()
