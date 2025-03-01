@@ -18,11 +18,13 @@ public class PatternDetector
     
     private GridCell[,] grid;
     private int gridSize;
+    private GridManager gridManager;
     
-    public PatternDetector(GridCell[,] grid, int gridSize)
+    public PatternDetector(GridCell[,] grid, int gridSize, GridManager gridManager)
     {
         this.grid = grid;
         this.gridSize = gridSize;
+        this.gridManager = gridManager;
     }
     
     public void UpdateGrid(GridCell[,] newGrid, int newGridSize)
@@ -52,7 +54,7 @@ public class PatternDetector
             int newX = x + directions[i].x;
             int newY = y + directions[i].y;
             
-            if (IsValidPosition(newX, newY) && grid[newX, newY].HasX)
+            if (IsValidPosition(newX, newY) && grid[newX, newY].HasX && !gridManager.IsCellMatched(newX, newY))
             {
                 startPoints.Add(new Vector2Int(newX, newY));
             }
@@ -113,7 +115,7 @@ public class PatternDetector
                 int newX = x + lShapes[i][j].x;
                 int newY = y + lShapes[i][j].y;
 
-                if (!IsValidPosition(newX, newY) || !grid[newX, newY].HasX)
+                if (!IsValidPosition(newX, newY) || !grid[newX, newY].HasX || gridManager.IsCellMatched(newX, newY))
                 {
                     isValidShape = false;
                     break;
@@ -173,6 +175,7 @@ public class PatternDetector
                 
                 if (!IsValidPosition(checkX, checkY)) break;
                 if (!grid[checkX, checkY].HasX) break;
+                if (gridManager.IsCellMatched(checkX, checkY)) break;
                 
                 line.Add(new Vector2Int(checkX, checkY));
             }

@@ -30,6 +30,9 @@ public class XDrawer : MonoBehaviour
     private Coroutine currentBlinkAnimation;
     private Color originalColor;
     
+    // X çizimi devam ediyor mu? (sadece durum takibi için, engelleme yapmıyor)
+    private bool isDrawing = false;
+    
     // X çizgilerinin pozisyonları
     private readonly Vector3 line1Start = new Vector3(-0.4f, 0.4f, 0);
     private readonly Vector3 line1End = new Vector3(0.4f, -0.4f, 0);
@@ -97,6 +100,8 @@ public class XDrawer : MonoBehaviour
     {
         // Eğer önceki animasyon varsa durdur
         StopCurrentAnimation();
+        
+        // X çizmeye başla
         currentAnimation = StartCoroutine(AnimateX());
     }
     
@@ -109,6 +114,7 @@ public class XDrawer : MonoBehaviour
         {
             StopCoroutine(currentAnimation);
             currentAnimation = null;
+            isDrawing = false;
         }
     }
 
@@ -117,6 +123,9 @@ public class XDrawer : MonoBehaviour
     /// </summary>
     private IEnumerator AnimateX()
     {
+        // Çizim başladı
+        isDrawing = true;
+        
         // İlk çizgiyi çiz
         line1.enabled = true;
         yield return StartCoroutine(DrawLine(line1, line1Start, line1End));
@@ -128,6 +137,8 @@ public class XDrawer : MonoBehaviour
         line2.enabled = true;
         yield return StartCoroutine(DrawLine(line2, line2Start, line2End));
 
+        // Çizim tamamlandı
+        isDrawing = false;
         currentAnimation = null;
     }
 
@@ -343,5 +354,13 @@ public class XDrawer : MonoBehaviour
     private void ResetLineWidths()
     {
         SetLineWidths(lineWidth);
+    }
+    
+    /// <summary>
+    /// X çiziminin devam edip etmediğini kontrol eder
+    /// </summary>
+    public bool IsDrawing()
+    {
+        return isDrawing;
     }
 }

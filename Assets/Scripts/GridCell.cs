@@ -33,24 +33,32 @@ public class GridCell : MonoBehaviour
     /// </summary>
     private void OnMouseDown()
     {
-        if (!hasX)
+        // Eğer hücrede zaten X yoksa ve hücre eşleşmiş olarak işaretlenmemişse
+        if (!hasX && !gridManager.IsCellMatched(gridPosition.x, gridPosition.y))
         {
             hasX = true;
+            
+            // Önce pattern kontrolü yap ve sonuçları cache'le
+            gridManager.CheckForPotentialMatch(gridPosition.x, gridPosition.y);
+            
+            // Sonra X çizme animasyonunu başlat
             xDrawer.DrawX();
-            StartCoroutine(WaitForXDrawAndCheck());
+            
+            // X çizimi tamamlandıktan sonra eşleşen pattern'leri işle
+            StartCoroutine(WaitForXDrawAndProcess());
         }
     }
     
     /// <summary>
-    /// X çiziminin tamamlanmasını bekler ve sonra pattern kontrolü yapar
+    /// X çiziminin tamamlanmasını bekler ve sonra eşleşen pattern'leri işler
     /// </summary>
-    public IEnumerator WaitForXDrawAndCheck()
+    public IEnumerator WaitForXDrawAndProcess()
     {
         // X çiziminin tamamlanması için bekle
         yield return new WaitForSeconds(drawCompletionTime);
         
-        // Pattern kontrolünü başlat
-        gridManager.CheckConnectedCells(gridPosition.x, gridPosition.y);
+        // Eşleşen pattern'leri işle
+        gridManager.ProcessMatchedPatterns(gridPosition.x, gridPosition.y);
     }
 
     /// <summary>
