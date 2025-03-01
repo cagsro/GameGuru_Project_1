@@ -9,6 +9,7 @@ public class GridCell : MonoBehaviour
 {
     [SerializeField] private XDrawer xDrawer;
     [SerializeField] private Transform XPivot;
+    [SerializeField] private Transform sprite;
     
     [Header("Animation Settings")]
     [SerializeField] private float punchDuration = 0.3f;
@@ -37,7 +38,8 @@ public class GridCell : MonoBehaviour
         if (!hasX && !gridManager.IsCellMatched(gridPosition.x, gridPosition.y))
         {
             hasX = true;
-            
+
+            sprite.DOPunchScale(Vector3.one * 0.1f, 0.3f, 0, 0f);
             // Önce pattern kontrolü yap ve sonuçları cache'le
             gridManager.CheckForPotentialMatch(gridPosition.x, gridPosition.y);
             
