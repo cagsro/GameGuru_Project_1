@@ -1,118 +1,99 @@
 using UnityEngine;
-using System.Collections.Generic;
-using System.Collections;
+using DG.Tweening;
 
 /// <summary>
-/// Oyun içindeki tüm ses efektlerini yöneten merkezi sınıf
+/// Oyun içindeki ses efektlerini yöneten basit sınıf
 /// </summary>
 public class AudioManager : MonoBehaviour
 {
-    // Singleton instance
     public static AudioManager Instance { get; private set; }
-    
-    [Header("Audio Settings")]
-    [SerializeField] private int initialPoolSize = 5;
-    [SerializeField] [Range(0f, 1f)] private float masterVolume = 1f;
-    [SerializeField] private bool dontDestroyOnLoad = false; // Sahneler arası geçişte korunup korunmayacağı
     
     [Header("Sound Effects")]
     [SerializeField] private AudioClip lineDrawSound;
     [SerializeField] private AudioClip completeSound;
     [SerializeField] private AudioClip gridCreateSound;
+    
+    [Header("Volume Settings")]
+    [SerializeField] [Range(0f, 1f)] private float masterVolume = 1f;
     [SerializeField] [Range(0f, 1f)] private float drawVolume = 0.7f;
     [SerializeField] [Range(0f, 1f)] private float completeVolume = 1f;
     [SerializeField] [Range(0f, 1f)] private float gridCreateVolume = 0.5f;
     
     [Header("Pitch Settings")]
-    [SerializeField] private float startPitch = 0.8f;
-    [SerializeField] private float endPitch = 1.5f;
-    [SerializeField] private float pitchStepPerCell = 0.05f;
+    [SerializeField] [Range(0.5f, 1.5f)] private float startPitch = 0.7f;
+    [SerializeField] [Range(1f, 2f)] private float maxPitch = 1.5f;
     
-    // AudioSource havuzu
-    private List<AudioSource> audioSourcePool;
-    private AudioSource pitchControlSource; // Pitch değişimi için özel AudioSource
+    private AudioSource[] audioSources;
+    private int currentAudioSourceIndex = 0;
+    private const int AUDIO_SOURCE_COUNT = 10; // Aynı anda çalabilecek maksimum ses sayısı
+    private float currentGridProgress = 0f; // Grid oluşturma ilerlemesi (0-1 arası)
     
     private void Awake()
     {
-        // Singleton pattern uygulama
         if (Instance == null)
         {
             Instance = this;
-            
-            // Eğer dontDestroyOnLoad seçeneği aktifse, sahneler arası geçişte koru
-            if (dontDestroyOnLoad)
-            {
-                DontDestroyOnLoad(gameObject);
-            }
-            
-            InitializeAudioPool();
+            InitializeAudioSources();
         }
         else
         {
-            // Eğer zaten bir instance varsa, bu objeyi yok et
             Destroy(gameObject);
         }
     }
-    
-    /// <summary>
-    /// AudioSource havuzunu başlatır
-    /// </summary>
-    private void InitializeAudioPool()
+
+    private void InitializeAudioSources()
     {
-        audioSourcePool = new List<AudioSource>();
-        
-        for (int i = 0; i < initialPoolSize; i++)
+        audioSources = new AudioSource[AUDIO_SOURCE_COUNT];
+        for (int i = 0; i < AUDIO_SOURCE_COUNT; i++)
         {
-            CreateNewAudioSource();
+            audioSources[i] = gameObject.AddComponent<AudioSource>();
+            audioSources[i].playOnAwake = false;
         }
-        
-        // Pitch kontrolü için özel bir AudioSource oluştur
-        pitchControlSource = gameObject.AddComponent<AudioSource>();
-        pitchControlSource.playOnAwake = false;
-        pitchControlSource.loop = false;
     }
     
     /// <summary>
-    /// Yeni bir AudioSource oluşturur ve havuza ekler
+    /// Grid oluşturma ilerlemesini sıfırlar
     /// </summary>
-    private AudioSource CreateNewAudioSource()
+    public void ResetGridProgress()
     {
-        AudioSource audioSource = gameObject.AddComponent<AudioSource>();
-        audioSource.playOnAwake = false;
-        audioSourcePool.Add(audioSource);
-        return audioSource;
+        currentGridProgress = 0f;
     }
     
     /// <summary>
-    /// Havuzdan kullanılabilir bir AudioSource alır
+    /// Kullanılabilir bir AudioSource komponenti alır
     /// </summary>
     private AudioSource GetAvailableAudioSource()
     {
-        // Kullanılmayan bir AudioSource bul
-        foreach (var source in audioSourcePool)
-        {
-            if (!source.isPlaying)
-            {
-                return source;
-            }
-        }
-        
-        // Eğer tüm AudioSource'lar kullanılıyorsa, yeni bir tane oluştur
-        return CreateNewAudioSource();
+        // Sıradaki AudioSource'u al ve indeksi güncelle
+        AudioSource source = audioSources[currentAudioSourceIndex];
+        currentAudioSourceIndex = (currentAudioSourceIndex + 1) % AUDIO_SOURCE_COUNT;
+        return source;
     }
     
     /// <summary>
     /// Belirtilen ses klibini çalar
     /// </summary>
-    public void PlaySound(AudioClip clip, float volume = 1f)
+    private void PlaySound(AudioClip clip, float volume, float pitch = 1f)
     {
         if (clip == null) return;
         
         AudioSource source = GetAvailableAudioSource();
         source.clip = clip;
         source.volume = volume * masterVolume;
-        source.pitch = 1f; // Normal pitch
+        source.pitch = pitch;
         source.Play();
+    }
+    
+    /// <summary>
+    /// Belirtilen ses klibini gecikmeli olarak çalar
+    /// </summary>
+    private void PlaySoundDelayed(AudioClip clip, float volume, float delay, float pitch = 1f)
+    {
+        if (clip == null) return;
+        
+        DOVirtual.DelayedCall(delay, () => {
+            PlaySound(clip, volume, pitch);
+        });
     }
     
     /// <summary>
@@ -132,56 +113,12 @@ public class AudioManager : MonoBehaviour
     }
     
     /// <summary>
-    /// Grid oluşturma sesini, giderek artan pitch değeriyle çalar
+    /// Grid oluşturma sesini artan pitch ile çalar
     /// </summary>
-    public void PlayGridCreateSoundWithPitch(int totalCells)
+    public void PlayGridCreateSound(float delay = 0f, float progressIncrement = 0.04f)
     {
-        if (gridCreateSound == null || pitchControlSource == null) return;
-        
-        // Mevcut çalan sesi durdur
-        if (pitchControlSource.isPlaying)
-        {
-            pitchControlSource.Stop();
-        }
-        
-        // Coroutine'i başlat
-        StartCoroutine(PlaySoundWithRisingPitch(totalCells));
-    }
-    
-    /// <summary>
-    /// Artan pitch değeriyle ses çalma coroutine'i
-    /// </summary>
-    private IEnumerator PlaySoundWithRisingPitch(int totalCells)
-    {
-        pitchControlSource.clip = gridCreateSound;
-        pitchControlSource.volume = gridCreateVolume * masterVolume;
-        pitchControlSource.loop = true;
-        pitchControlSource.pitch = startPitch;
-        pitchControlSource.Play();
-        
-        float currentPitch = startPitch;
-        float targetPitch = Mathf.Min(endPitch, startPitch + (totalCells * pitchStepPerCell));
-        
-        while (currentPitch < targetPitch)
-        {
-            currentPitch += pitchStepPerCell;
-            pitchControlSource.pitch = currentPitch;
-            yield return new WaitForSeconds(0.05f); // Pitch değişim hızı
-        }
-        
-        // Son pitch değerine ulaştıktan sonra biraz bekle ve sesi kapat
-        yield return new WaitForSeconds(0.2f);
-        
-        // Sesi yavaşça kapat
-        float currentVolume = pitchControlSource.volume;
-        while (currentVolume > 0.05f)
-        {
-            currentVolume -= 0.05f;
-            pitchControlSource.volume = currentVolume;
-            yield return new WaitForSeconds(0.02f);
-        }
-        
-        pitchControlSource.Stop();
-        pitchControlSource.loop = false;
+        float currentPitch = Mathf.Lerp(startPitch, maxPitch, currentGridProgress);
+        PlaySoundDelayed(gridCreateSound, gridCreateVolume, delay, currentPitch);
+        currentGridProgress = Mathf.Min(1f, currentGridProgress + progressIncrement);
     }
 }

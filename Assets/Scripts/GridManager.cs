@@ -8,7 +8,7 @@ public class GridManager : MonoBehaviour
 {
     [SerializeField] private Camera mainCam;
     [SerializeField] private GameObject cellPrefab;
-    [SerializeField] private int gridSize = 5;
+    [SerializeField, Range(3, 10)] private int gridSize = 5;
     [SerializeField] private TMPro.TMP_InputField sizeInputField;
     
     private GridCell[,] grid;
@@ -44,10 +44,10 @@ public class GridManager : MonoBehaviour
         var (cellSize, spacing) = CalculateGridDimensions();
         var startPositions = CalculateStartPositions(cellSize, spacing);
 
-        // Grid oluşturma sesini çal (artan pitch ile)
+        // Grid oluşturma ses progress'ini sıfırla
         if (AudioManager.Instance != null)
         {
-            AudioManager.Instance.PlayGridCreateSoundWithPitch(gridSize * gridSize);
+            AudioManager.Instance.ResetGridProgress();
         }
 
         for (int x = 0; x < gridSize; x++)
@@ -91,9 +91,15 @@ public class GridManager : MonoBehaviour
         grid[x, y] = cellObj.GetComponent<GridCell>();
         grid[x, y].Initialize(x, y, this);
         
+        // Grid oluşturma sesini çal (hücre oluşturma animasyonuyla senkronize)
+        float delay = (x + y) * 0.05f;
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayGridCreateSound(delay);
+        }
+        
         // Animasyon uygula
         Vector3 targetScale = new Vector3(cellSize, cellSize, 1);
-        float delay = (x + y) * 0.05f;
         gridAnimator.AnimateCellCreation(cellObj, delay, targetScale);
     }
 
@@ -216,6 +222,12 @@ public class GridManager : MonoBehaviour
         
         // Kısa bir gecikme ile yeni grid'i oluştur
         DOVirtual.DelayedCall(0.5f, () => {
+            // Ses progress'ini sıfırla
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.ResetGridProgress();
+            }
+            
             // Eski grid'i tamamen temizle
             foreach (Transform child in transform)
             {
@@ -226,6 +238,7 @@ public class GridManager : MonoBehaviour
             if (int.TryParse(sizeInputField.text, out int newSize))
             {
                 gridSize = Mathf.Clamp(newSize, 3, 10); // Limit size between 3 and 10
+                sizeInputField.text=gridSize.ToString();
             }
             
             // Yeni grid oluştur
