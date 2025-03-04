@@ -34,23 +34,8 @@ public class AudioManager : MonoBehaviour
     
     private void Awake()
     {
-        InitializeSingleton();
-    }
-
-    /// <summary>
-    /// Singleton pattern'ini initialize eder
-    /// </summary>
-    private void InitializeSingleton()
-    {
-        if (Instance == null)
-        {
-            Instance = this;
-            InitializeAudioSources();
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
+        Instance = this;
+        InitializeAudioSources();
     }
 
     /// <summary>

@@ -118,14 +118,6 @@ public class GridManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Belirtilen konumun grid içinde geçerli olup olmadığını kontrol eder
-    /// </summary>
-    private bool IsValidPosition(int x, int y)
-    {
-        return x >= 0 && x < gridSize && y >= 0 && y < gridSize;
-    }
-
-    /// <summary>
     /// Belirtilen hücrenin eşleşmiş sayılıp sayılmadığını kontrol eder
     /// </summary>
     public bool IsCellMatched(int x, int y)
