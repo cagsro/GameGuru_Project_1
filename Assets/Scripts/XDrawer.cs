@@ -142,7 +142,7 @@ public class XDrawer : MonoBehaviour
         
         yield return StartCoroutine(DrawLine(line2, line2Start, line2End));
 
-        // Çizim tamamlandı (tamamlanma sesi kaldırıldı, artık pattern bulunduğunda çalınacak)
+        // Çizim tamamlandı
         isDrawing = false;
         currentAnimation = null;
     }

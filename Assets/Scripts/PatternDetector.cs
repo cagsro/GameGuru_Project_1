@@ -34,12 +34,29 @@ public class PatternDetector
     }
     
     /// <summary>
+    /// Pattern eşleşme sonuçlarını tutan yapı
+    /// </summary>
+    public struct MatchResult
+    {
+        public HashSet<Vector2Int> CellsToRemove;
+        public List<List<Vector2Int>> Patterns;
+        public int MatchCount;
+
+        public MatchResult(HashSet<Vector2Int> cellsToRemove, List<List<Vector2Int>> patterns, int matchCount)
+        {
+            CellsToRemove = cellsToRemove;
+            Patterns = patterns;
+            MatchCount = matchCount;
+        }
+    }
+    
+    /// <summary>
     /// Belirtilen konumdaki hücreye bağlı tüm pattern'leri kontrol eder
     /// </summary>
-    public (HashSet<Vector2Int> cellsToRemove, List<List<Vector2Int>> allPatterns, int matchCount) DetectPatterns(int x, int y)
+    public MatchResult DetectPatterns(int x, int y)
     {
         if (!IsValidPosition(x, y) || !grid[x, y].HasX) 
-            return (new HashSet<Vector2Int>(), new List<List<Vector2Int>>(), 0);
+            return new MatchResult(new HashSet<Vector2Int>(), new List<List<Vector2Int>>(), 0);
 
         var cellsToRemove = new HashSet<Vector2Int>();
         var startPoints = new List<Vector2Int>(5) { new Vector2Int(x, y) };
@@ -80,21 +97,34 @@ public class PatternDetector
             }
         }
 
-        // Düz çizgileri de kontrol et
-        var straightPattern = CheckStraightLines(x, y);
-        if (straightPattern.Count > 0)
+        // Yatay çizgileri de kontrol et
+        var horizontalPattern = CheckHorizontalLines(x, y);
+        if (horizontalPattern.Count > 0)
         {
             foundMatches += 1;
-            allPatterns.Add(straightPattern);
+            allPatterns.Add(horizontalPattern);
             
-            // Düz çizgi pattern'indeki hücreleri silme listesine ekle
-            foreach (var pos in straightPattern)
+            // Hücreleri silme listesine ekle
+            foreach (var pos in horizontalPattern)
             {
                 cellsToRemove.Add(pos);
             }
         }
-        
-        return (cellsToRemove, allPatterns, foundMatches);
+        // Dikey çizgileri de kontrol et
+        var verticalPattern = CheckVerticalLines(x, y);
+        if (verticalPattern.Count > 0)
+        {
+            foundMatches += 1;
+            allPatterns.Add(verticalPattern);
+
+            // Hücreleri silme listesine ekle
+            foreach (var pos in verticalPattern)
+            {
+                cellsToRemove.Add(pos);
+            }
+        }
+
+        return new MatchResult(cellsToRemove, allPatterns, foundMatches);
     }
     
     /// <summary>
@@ -135,7 +165,7 @@ public class PatternDetector
     /// <summary>
     /// Düz çizgi pattern'lerini kontrol eder
     /// </summary>
-    private List<Vector2Int> CheckStraightLines(int x, int y)
+    private List<Vector2Int> CheckHorizontalLines(int x, int y)
     {
         // Yatay kontrol
         var horizontalLine = GetLine(x, y, true);
@@ -143,8 +173,11 @@ public class PatternDetector
         {
             return horizontalLine;
         }
-
-        // Yatay match bulunamadıysa dikey kontrol
+        return new List<Vector2Int>();
+    }
+    private List<Vector2Int> CheckVerticalLines(int x, int y)
+    {
+        // Dikey kontrol
         var verticalLine = GetLine(x, y, false);
         if (verticalLine.Count >= 3)
         {
@@ -153,7 +186,7 @@ public class PatternDetector
 
         return new List<Vector2Int>();
     }
-    
+
     /// <summary>
     /// Belirtilen konumdan başlayarak yatay veya dikey bir çizgi oluşturur
     /// </summary>

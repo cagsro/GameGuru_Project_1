@@ -23,12 +23,24 @@ public class AudioManager : MonoBehaviour
     [SerializeField] [Range(0.5f, 1.5f)] private float startPitch = 0.7f;
     [SerializeField] [Range(1f, 2f)] private float maxPitch = 1.5f;
     
+    // Ses kaynağı havuzu ayarları
+    private const int AUDIO_SOURCE_COUNT = 10;
+    private const float DEFAULT_PITCH = 1f;
+    private const float DEFAULT_GRID_PROGRESS_INCREMENT = 0.04f;
+    
     private AudioSource[] audioSources;
     private int currentAudioSourceIndex = 0;
-    private const int AUDIO_SOURCE_COUNT = 10; // Aynı anda çalabilecek maksimum ses sayısı
-    private float currentGridProgress = 0f; // Grid oluşturma ilerlemesi (0-1 arası)
+    private float currentGridProgress = 0f;
     
     private void Awake()
+    {
+        InitializeSingleton();
+    }
+
+    /// <summary>
+    /// Singleton pattern'ini initialize eder
+    /// </summary>
+    private void InitializeSingleton()
     {
         if (Instance == null)
         {
@@ -41,14 +53,34 @@ public class AudioManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Ses kaynaklarını oluşturur ve yapılandırır
+    /// </summary>
     private void InitializeAudioSources()
     {
         audioSources = new AudioSource[AUDIO_SOURCE_COUNT];
+        
         for (int i = 0; i < AUDIO_SOURCE_COUNT; i++)
         {
-            audioSources[i] = gameObject.AddComponent<AudioSource>();
-            audioSources[i].playOnAwake = false;
+            CreateAudioSource(i);
         }
+    }
+
+    /// <summary>
+    /// Yeni bir ses kaynağı oluşturur ve yapılandırır
+    /// </summary>
+    private void CreateAudioSource(int index)
+    {
+        audioSources[index] = gameObject.AddComponent<AudioSource>();
+        ConfigureAudioSource(audioSources[index]);
+    }
+
+    /// <summary>
+    /// Ses kaynağının temel ayarlarını yapar
+    /// </summary>
+    private void ConfigureAudioSource(AudioSource source)
+    {
+        source.playOnAwake = false;
     }
     
     /// <summary>
@@ -60,24 +92,31 @@ public class AudioManager : MonoBehaviour
     }
     
     /// <summary>
-    /// Kullanılabilir bir AudioSource komponenti alır
+    /// Kullanılabilir bir ses kaynağı alır
     /// </summary>
-    private AudioSource GetAvailableAudioSource()
+    private AudioSource GetNextAudioSource()
     {
-        // Sıradaki AudioSource'u al ve indeksi güncelle
         AudioSource source = audioSources[currentAudioSourceIndex];
         currentAudioSourceIndex = (currentAudioSourceIndex + 1) % AUDIO_SOURCE_COUNT;
         return source;
     }
     
     /// <summary>
-    /// Belirtilen ses klibini çalar
+    /// Ses klibini hemen çalar
     /// </summary>
-    private void PlaySound(AudioClip clip, float volume, float pitch = 1f)
+    private void PlaySound(AudioClip clip, float volume, float pitch = DEFAULT_PITCH)
     {
         if (clip == null) return;
         
-        AudioSource source = GetAvailableAudioSource();
+        var source = GetNextAudioSource();
+        ConfigureAndPlaySound(source, clip, volume, pitch);
+    }
+
+    /// <summary>
+    /// Ses kaynağını yapılandırır ve çalar
+    /// </summary>
+    private void ConfigureAndPlaySound(AudioSource source, AudioClip clip, float volume, float pitch)
+    {
         source.clip = clip;
         source.volume = volume * masterVolume;
         source.pitch = pitch;
@@ -85,15 +124,12 @@ public class AudioManager : MonoBehaviour
     }
     
     /// <summary>
-    /// Belirtilen ses klibini gecikmeli olarak çalar
+    /// Ses klibini gecikmeli olarak çalar
     /// </summary>
-    private void PlaySoundDelayed(AudioClip clip, float volume, float delay, float pitch = 1f)
+    private void PlaySoundDelayed(AudioClip clip, float volume, float delay, float pitch = DEFAULT_PITCH)
     {
         if (clip == null) return;
-        
-        DOVirtual.DelayedCall(delay, () => {
-            PlaySound(clip, volume, pitch);
-        });
+        DOVirtual.DelayedCall(delay, () => PlaySound(clip, volume, pitch));
     }
     
     /// <summary>
@@ -115,10 +151,26 @@ public class AudioManager : MonoBehaviour
     /// <summary>
     /// Grid oluşturma sesini artan pitch ile çalar
     /// </summary>
-    public void PlayGridCreateSound(float delay = 0f, float progressIncrement = 0.04f)
+    public void PlayGridCreateSound(float delay = 0f, float progressIncrement = DEFAULT_GRID_PROGRESS_INCREMENT)
     {
-        float currentPitch = Mathf.Lerp(startPitch, maxPitch, currentGridProgress);
+        float currentPitch = CalculateGridPitch();
         PlaySoundDelayed(gridCreateSound, gridCreateVolume, delay, currentPitch);
-        currentGridProgress = Mathf.Min(1f, currentGridProgress + progressIncrement);
+        UpdateGridProgress(progressIncrement);
+    }
+
+    /// <summary>
+    /// Mevcut ilerlemeye göre pitch değerini hesaplar
+    /// </summary>
+    private float CalculateGridPitch()
+    {
+        return Mathf.Lerp(startPitch, maxPitch, currentGridProgress);
+    }
+
+    /// <summary>
+    /// Grid oluşturma ilerlemesini günceller
+    /// </summary>
+    private void UpdateGridProgress(float increment)
+    {
+        currentGridProgress = Mathf.Min(1f, currentGridProgress + increment);
     }
 }

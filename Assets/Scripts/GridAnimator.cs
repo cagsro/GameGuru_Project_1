@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using System;
 using DG.Tweening;
+using System.Collections;
 
 /// <summary>
 /// Grid animasyonlarını yöneten sınıf.
@@ -10,6 +11,13 @@ using DG.Tweening;
 public class GridAnimator
 {
     private GridCell[,] grid;
+    
+    // Animasyon ayarları
+    private const float CELL_CREATION_DURATION = 0.3f;
+    private const float CELL_REMOVAL_DURATION = 0.2f;
+    private const float PATTERN_HIGHLIGHT_DURATION = 0.3f;
+    private const float PATTERN_HIGHLIGHT_DELAY = 0.2f;
+    private const float INITIAL_HIGHLIGHT_DELAY = 0.1f;
     
     public GridAnimator(GridCell[,] grid)
     {
@@ -26,23 +34,38 @@ public class GridAnimator
     /// </summary>
     public void AnimateCellCreation(GameObject cellObj, float delay, Vector3 targetScale)
     {
-        // Görünmez başla
         var cellRenderer = cellObj.GetComponent<SpriteRenderer>();
+        SetInitialCellState(cellRenderer);
+        AnimateCellAppearance(cellObj, cellRenderer, delay, targetScale);
+    }
+
+    /// <summary>
+    /// Hücrenin başlangıç durumunu ayarlar
+    /// </summary>
+    private void SetInitialCellState(SpriteRenderer cellRenderer)
+    {
         if (cellRenderer != null)
         {
             Color startColor = cellRenderer.color;
             startColor.a = 0f;
             cellRenderer.color = startColor;
         }
-        
-        // Scale ve fade animasyonları
-        cellObj.transform.DOScale(targetScale, 0.3f)
+    }
+
+    /// <summary>
+    /// Hücre görünüm animasyonlarını başlatır
+    /// </summary>
+    private void AnimateCellAppearance(GameObject cellObj, SpriteRenderer cellRenderer, float delay, Vector3 targetScale)
+    {
+        // Scale animasyonu
+        cellObj.transform.DOScale(targetScale, CELL_CREATION_DURATION)
             .SetDelay(delay)
             .SetEase(Ease.OutBack);
 
+        // Fade animasyonu
         if (cellRenderer != null)
         {
-            cellRenderer.DOFade(1f, 0.3f)
+            cellRenderer.DOFade(1f, CELL_CREATION_DURATION)
                 .SetDelay(delay)
                 .SetEase(Ease.OutCubic);
         }
@@ -54,80 +77,82 @@ public class GridAnimator
     public void AnimateCellRemoval(GameObject cellObj, float delay, Action onComplete = null)
     {
         var cellRenderer = cellObj.GetComponent<SpriteRenderer>();
-        
-        // Fade-out ve scale animasyonu
+        AnimateCellDisappearance(cellObj, cellRenderer, delay, onComplete);
+    }
+
+    /// <summary>
+    /// Hücre kaybolma animasyonlarını başlatır
+    /// </summary>
+    private void AnimateCellDisappearance(GameObject cellObj, SpriteRenderer cellRenderer, float delay, Action onComplete)
+    {
+        // Fade-out animasyonu
         if (cellRenderer != null)
         {
-            cellRenderer.DOFade(0f, 0.2f).SetDelay(delay);
+            cellRenderer.DOFade(0f, CELL_REMOVAL_DURATION).SetDelay(delay);
         }
         
-        cellObj.transform.DOScale(Vector3.zero, 0.2f)
+        // Scale animasyonu
+        cellObj.transform.DOScale(Vector3.zero, CELL_REMOVAL_DURATION)
             .SetDelay(delay)
             .OnComplete(() => {
                 if (onComplete != null)
+                {
                     onComplete();
+                }
                 else
+                {
                     UnityEngine.Object.Destroy(cellObj);
+                }
             });
     }
     
     /// <summary>
     /// Pattern'leri sırayla vurgular
     /// </summary>
-    public void HighlightPatternsSequentially(List<List<Vector2Int>> patterns, Action onComplete)
+    public IEnumerator HighlightPatternsCoroutine(List<List<Vector2Int>> patterns)
     {
-        // Eğer pattern yoksa direkt tamamla
-        if (patterns.Count == 0)
+        if (patterns == null || patterns.Count == 0)
+            yield break;
+
+        // Her pattern için highlight işlemini yap
+        foreach (var pattern in patterns)
         {
-            onComplete?.Invoke();
-            return;
+            // İlk bekleme
+            yield return new WaitForSeconds(INITIAL_HIGHLIGHT_DELAY);
+            
+            // Pattern'i vurgula
+            HighlightPattern(pattern);
+            
+            // Pattern arası bekleme
+            yield return new WaitForSeconds(PATTERN_HIGHLIGHT_DURATION + PATTERN_HIGHLIGHT_DELAY);
         }
-        
-        // Her pattern için animasyon süresi ve aralarındaki gecikme
-        float animDuration = 0.3f;
-        float delayBetweenPatterns = 0.2f;
-        
-        // Sırayla pattern'leri vurgula
-        DOVirtual.DelayedCall(0.1f, () => {
-            HighlightPatternSequence(patterns, 0, animDuration, delayBetweenPatterns, onComplete);
-        });
     }
-    
+
     /// <summary>
-    /// Pattern'leri sırayla vurgular (recursive)
+    /// Tek bir pattern'i vurgular
     /// </summary>
-    private void HighlightPatternSequence(List<List<Vector2Int>> patterns, int currentIndex, float animDuration, float delay, Action onComplete)
+    private void HighlightPattern(List<Vector2Int> pattern)
     {
-        // Tüm pattern'ler tamamlandıysa bitir
-        if (currentIndex >= patterns.Count)
+        PlayPatternCompleteSound();
+        
+        foreach (var pos in pattern)
         {
-            onComplete?.Invoke();
-            return;
+            if (IsValidPosition(pos.x, pos.y) && grid[pos.x, pos.y] != null)
+            {
+                grid[pos.x, pos.y].PunchAnim();
+            }
         }
-        
-        // Mevcut pattern'i vurgula
-        var currentPattern = patterns[currentIndex];
-        
-        // Her pattern için tamamlanma sesini çal
+    }
+
+    /// <summary>
+    /// Pattern tamamlanma sesini çalar
+    /// </summary>
+    private void PlayPatternCompleteSound()
+    {
         if (AudioManager.Instance != null)
         {
             AudioManager.Instance.PlayCompleteSound();
         }
-        
-        // Pattern'deki tüm hücreleri vurgula
-        foreach (var pos in currentPattern)
-        {
-            if (IsValidPosition(pos.x, pos.y) && grid[pos.x, pos.y] != null)
-            {
-                // X işaretine punch animasyonu uygula
-                grid[pos.x, pos.y].PunchAnim();
-            }
-        }
-        
-        // Sonraki pattern'e geç
-        DOVirtual.DelayedCall(animDuration + delay, () => {
-            HighlightPatternSequence(patterns, currentIndex + 1, animDuration, delay, onComplete);
-        });
     }
     
     /// <summary>

@@ -12,6 +12,8 @@ public class GridCell : MonoBehaviour
     [SerializeField] private Transform sprite;
     
     [Header("Animation Settings")]
+    [SerializeField] private float clickAnimationDuration = 0.3f;
+    [SerializeField] private float clickAnimationScale = 0.1f;
     [SerializeField] private float punchDuration = 0.3f;
     [SerializeField] private float punchStrength = 0.5f;
     [SerializeField] private float drawCompletionTime = 0.5f;
@@ -34,57 +36,90 @@ public class GridCell : MonoBehaviour
     /// </summary>
     private void OnMouseDown()
     {
-        // Eğer hücrede zaten X yoksa ve hücre eşleşmiş olarak işaretlenmemişse
-        if (!hasX && !gridManager.IsCellMatched(gridPosition.x, gridPosition.y))
+        if (CanPlaceX())
         {
-            hasX = true;
-
-            sprite.DOPunchScale(Vector3.one * 0.1f, 0.3f, 0, 0f);
-            // Önce pattern kontrolü yap ve sonuçları cache'le
-            gridManager.CheckForPotentialMatch(gridPosition.x, gridPosition.y);
-            
-            // Sonra X çizme animasyonunu başlat
-            xDrawer.DrawX();
-            
-            // X çizimi tamamlandıktan sonra eşleşen pattern'leri işle
-            StartCoroutine(WaitForXDrawAndProcess());
+            PlaceX();
         }
+    }
+
+    /// <summary>
+    /// Hücreye X işareti koyulabilir mi kontrol eder
+    /// </summary>
+    private bool CanPlaceX()
+    {
+        return !hasX && !gridManager.IsCellMatched(gridPosition.x, gridPosition.y);
+    }
+
+    /// <summary>
+    /// Hücreye X işareti koyar ve gerekli işlemleri yapar
+    /// </summary>
+    private void PlaceX()
+    {
+        hasX = true;
+        PlayClickAnimation();
+        ProcessXPlacement();
+    }
+
+    /// <summary>
+    /// Tıklama animasyonunu oynatır
+    /// </summary>
+    private void PlayClickAnimation()
+    {
+        sprite.DOPunchScale(Vector3.one * clickAnimationScale, clickAnimationDuration, 0, 0f);
+    }
+
+    /// <summary>
+    /// X yerleştirme işlemlerini yapar
+    /// </summary>
+    private void ProcessXPlacement()
+    {
+        // Pattern kontrolü yap ve sonuçları cache'le
+        gridManager.CheckForPotentialMatch(gridPosition.x, gridPosition.y);
+        
+        // X çizme animasyonunu başlat
+        xDrawer.DrawX();
+        
+        // X çizimi tamamlandıktan sonra eşleşen pattern'leri işle
+        StartCoroutine(WaitForXDrawAndProcess());
     }
     
     /// <summary>
     /// X çiziminin tamamlanmasını bekler ve sonra eşleşen pattern'leri işler
     /// </summary>
-    public IEnumerator WaitForXDrawAndProcess()
+    private IEnumerator WaitForXDrawAndProcess()
     {
-        // X çiziminin tamamlanması için bekle
         yield return new WaitForSeconds(drawCompletionTime);
-        
-        // Eşleşen pattern'leri işle
         gridManager.ProcessMatchedPatterns(gridPosition.x, gridPosition.y);
     }
 
     /// <summary>
-    /// X işaretine punch animasyonu uygular
+    /// X işaretine vurgu animasyonu uygular
     /// </summary>
     public void PunchAnim()
     {
-        // Eğer XPivot yoksa işlem yapma
         if (XPivot == null) return;
         
-        // X işaretinin pivot objesini punch scale et
+        PlayPunchAnimation();
+        PlayBlinkEffect();
+    }
+
+    /// <summary>
+    /// Punch animasyonunu oynatır
+    /// </summary>
+    private void PlayPunchAnimation()
+    {
         DOTween.Kill(XPivot);
-        
-        // Başlangıç scale değerini kaydet
         Vector3 xInitScale = XPivot.localScale;
         
-        // Punch animasyonu uygula
         XPivot.DOPunchScale(xInitScale * punchStrength, punchDuration, 0, 0)
-            .OnComplete(() => {
-                // Animasyon bitiminde orijinal scale'e geri dön
-                XPivot.localScale = xInitScale;
-            });
-        
-        // Aynı zamanda blink efekti uygula
+            .OnComplete(() => XPivot.localScale = xInitScale);
+    }
+
+    /// <summary>
+    /// Blink efektini oynatır
+    /// </summary>
+    private void PlayBlinkEffect()
+    {
         if (xDrawer != null)
         {
             xDrawer.BlinkHighlight();

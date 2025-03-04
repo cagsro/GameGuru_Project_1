@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using DG.Tweening;
+using System.Collections;
 
 public class GridManager : MonoBehaviour
 {
@@ -19,9 +20,23 @@ public class GridManager : MonoBehaviour
     // Komşu hücre yönlerini tanımla
     private readonly (int x, int y)[] neighborDirections = { (0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1) };
     
+    // Pattern eşleşme sonuçlarını tutan yapı
+    private struct MatchResult
+    {
+        public HashSet<Vector2Int> CellsToRemove;
+        public List<List<Vector2Int>> Patterns;
+        public int MatchCount;
+
+        public MatchResult(HashSet<Vector2Int> cellsToRemove, List<List<Vector2Int>> patterns, int matchCount)
+        {
+            CellsToRemove = cellsToRemove;
+            Patterns = patterns;
+            MatchCount = matchCount;
+        }
+    }
+
     // Eşleşen pattern'leri geçici olarak saklamak için
-    private Dictionary<Vector2Int, (HashSet<Vector2Int> cellsToRemove, List<List<Vector2Int>> allPatterns, int matchCount)> matchCache = 
-        new Dictionary<Vector2Int, (HashSet<Vector2Int>, List<List<Vector2Int>>, int)>();
+    private Dictionary<Vector2Int, MatchResult> matchCache = new Dictionary<Vector2Int, MatchResult>();
     
     // Eşleşmiş sayılan hücreleri takip etmek için
     private HashSet<Vector2Int> matchedCells = new HashSet<Vector2Int>();
@@ -59,6 +74,7 @@ public class GridManager : MonoBehaviour
         }
     }
 
+    // Grid'in ekrana sığması için boyut hesaplaması
     private (float cellSize, float spacing) CalculateGridDimensions()
     {
         float height = 2f * mainCam.orthographicSize;
@@ -129,9 +145,9 @@ public class GridManager : MonoBehaviour
         Vector2Int cellPos = new Vector2Int(x, y);
         
         // Eğer pattern oluşmuşsa, bu pattern'i oluşturan hücreleri eşleşmiş olarak işaretle
-        if (result.allPatterns.Count > 0)
+        if (result.Patterns.Count > 0)
         {
-            foreach (var pattern in result.allPatterns)
+            foreach (var pattern in result.Patterns)
             {
                 foreach (var pos in pattern)
                 {
@@ -141,7 +157,7 @@ public class GridManager : MonoBehaviour
         }
         
         // Sonuçları cache'le
-        matchCache[cellPos] = result;
+        matchCache[cellPos] = new MatchResult(result.CellsToRemove, result.Patterns, result.MatchCount);
     }
     
     /// <summary>
@@ -154,40 +170,40 @@ public class GridManager : MonoBehaviour
         // Cache'den sonuçları al
         if (matchCache.TryGetValue(cellPos, out var result))
         {
-            var (cellsToRemove, allPatterns, foundMatches) = result;
+            if (result.Patterns.Count > 0)
+            {
+                // Pattern'leri vurgula ve sonrasında hücreleri sil
+                StartCoroutine(ProcessPatternsCoroutine(result));
+            }
             
-            // İşaretli hücreleri silmeden önce pattern'leri sırayla vurgula
-            if (allPatterns.Count > 0)
-            {
-                // Önce pattern'leri sırayla vurgula, sonra hücreleri sil
-                gridAnimator.HighlightPatternsSequentially(allPatterns, () => {
-                    // Vurgulama tamamlandıktan sonra hücreleri sil
-                    foreach (var pos in cellsToRemove)
-                    {
-                        if (grid[pos.x, pos.y] != null && grid[pos.x, pos.y].HasX)
-                        {
-                            grid[pos.x, pos.y].RemoveX();
-                            // Eşleşmiş hücrelerden çıkar
-                            matchedCells.Remove(pos);
-                        }
-                    }
+            // Cache'den temizle
+            matchCache.Remove(cellPos);
+        }
+    }
 
-                    // Match count'u güncelle
-                    if (foundMatches > 0)
-                    {
-                        matchCount += foundMatches;
-                        OnMatchCountChanged?.Invoke(matchCount);
-                    }
-                    
-                    // Cache'den temizle
-                    matchCache.Remove(cellPos);
-                });
-            }
-            else
+    /// <summary>
+    /// Pattern'leri sırayla işleyen coroutine
+    /// </summary>
+    private IEnumerator ProcessPatternsCoroutine(MatchResult result)
+    {
+        // Önce pattern'leri vurgula
+        yield return StartCoroutine(gridAnimator.HighlightPatternsCoroutine(result.Patterns));
+        
+        // Sonra hücreleri sil
+        foreach (var pos in result.CellsToRemove)
+        {
+            if (grid[pos.x, pos.y] != null && grid[pos.x, pos.y].HasX)
             {
-                // Eşleşme yoksa sadece cache'den temizle
-                matchCache.Remove(cellPos);
+                grid[pos.x, pos.y].RemoveX();
+                matchedCells.Remove(pos);
             }
+        }
+
+        // Match count'u güncelle
+        if (result.MatchCount > 0)
+        {
+            matchCount += result.MatchCount;
+            OnMatchCountChanged?.Invoke(matchCount);
         }
     }
 
