@@ -30,8 +30,6 @@ public class XDrawer : MonoBehaviour
     private Coroutine currentBlinkAnimation;
     private Color originalColor;
     
-    // X çizimi devam ediyor mu? (sadece durum takibi için, engelleme yapmıyor)
-    private bool isDrawing = false;
     
     // X çizgilerinin pozisyonları
     private readonly Vector3 line1Start = new Vector3(-0.4f, 0.4f, 0);
@@ -114,7 +112,6 @@ public class XDrawer : MonoBehaviour
         {
             StopCoroutine(currentAnimation);
             currentAnimation = null;
-            isDrawing = false;
         }
     }
 
@@ -123,8 +120,6 @@ public class XDrawer : MonoBehaviour
     /// </summary>
     private IEnumerator AnimateX()
     {
-        // Çizim başladı
-        isDrawing = true;
         
         // İlk çizgiyi çiz
         line1.enabled = true;
@@ -142,8 +137,6 @@ public class XDrawer : MonoBehaviour
         
         yield return StartCoroutine(DrawLine(line2, line2Start, line2End));
 
-        // Çizim tamamlandı
-        isDrawing = false;
         currentAnimation = null;
     }
     
@@ -179,17 +172,6 @@ public class XDrawer : MonoBehaviour
         if (AudioManager.Instance != null)
         {
             AudioManager.Instance.PlayDrawSound();
-        }
-    }
-    
-    /// <summary>
-    /// X tamamlanma sesini çalar (artık kullanılmıyor, GridAnimator tarafından çalınıyor)
-    /// </summary>
-    private void PlayCompleteSound()
-    {
-        if (AudioManager.Instance != null)
-        {
-            AudioManager.Instance.PlayCompleteSound();
         }
     }
 
@@ -256,8 +238,22 @@ public class XDrawer : MonoBehaviour
         // Orijinal rengi kaydet
         originalColor = lineColor;
         
-        // Blink animasyonunu başlat
-        currentBlinkAnimation = StartCoroutine(BlinkAnimation());
+        // Renk değişimi animasyonunu başlat
+        DOTween.To(() => lineColor, color => UpdateLineColors(color), highlightColor, blinkDuration)
+            .SetLoops(blinkCount * 2, LoopType.Yoyo)
+            .SetEase(blinkEase)
+            .OnComplete(() => {
+                UpdateLineColors(originalColor);
+                if (useFlashEffect) ResetLineWidths();
+            });
+        
+        // Flash efekti isteniyorsa genişlik animasyonunu da başlat
+        if (useFlashEffect)
+        {
+            DOTween.To(() => lineWidth, width => SetLineWidths(width), lineWidth * 1.5f, blinkDuration)
+                .SetLoops(blinkCount * 2, LoopType.Yoyo)
+                .SetEase(blinkEase);
+        }
     }
     
     /// <summary>
@@ -265,96 +261,9 @@ public class XDrawer : MonoBehaviour
     /// </summary>
     private void StopBlinkAnimation()
     {
-        if (currentBlinkAnimation != null)
-        {
-            StopCoroutine(currentBlinkAnimation);
-            currentBlinkAnimation = null;
-        }
-    }
-    
-    /// <summary>
-    /// X işaretine yanıp sönme animasyonu uygular
-    /// </summary>
-    private IEnumerator BlinkAnimation()
-    {
-        Sequence blinkSequence = DOTween.Sequence();
-        
-        for (int i = 0; i < blinkCount; i++)
-        {
-            // Geçici bir renk değişkeni oluştur
-            Color currentColor = originalColor;
-            
-            // Renk değişimi animasyonu
-            var colorTween = DOTween.To(
-                () => currentColor,
-                color => {
-                    currentColor = color;
-                    UpdateLineColors(color);
-                },
-                highlightColor,
-                blinkDuration / 2
-            ).SetEase(blinkEase);
-            
-            blinkSequence.Append(colorTween);
-            
-            colorTween = DOTween.To(
-                () => currentColor,
-                color => {
-                    currentColor = color;
-                    UpdateLineColors(color);
-                },
-                originalColor,
-                blinkDuration / 2
-            ).SetEase(blinkEase);
-            
-            blinkSequence.Append(colorTween);
-            
-            // Eğer flash efekti kullanılıyorsa, çizgilerin genişliğini de animasyonla değiştir
-            if (useFlashEffect)
-            {
-                AddWidthAnimation(blinkSequence, i * blinkDuration);
-            }
-        }
-        
-        // Sequence tamamlanana kadar bekle
-        yield return blinkSequence.WaitForCompletion();
-        
-        // Son olarak orijinal renge dön ve çizgi genişliğini sıfırla
+        DOTween.Kill(this);
         UpdateLineColors(originalColor);
         ResetLineWidths();
-        
-        currentBlinkAnimation = null;
-    }
-    
-    /// <summary>
-    /// Blink animasyonuna genişlik değişimi ekler
-    /// </summary>
-    private void AddWidthAnimation(Sequence sequence, float startDelay)
-    {
-        if (line1 == null || line2 == null) return;
-        
-        // Çizgi genişliğini kaydet
-        float originalWidth = lineWidth;
-        
-        // Genişliği artır
-        sequence.Join(
-            DOTween.To(
-                () => line1.startWidth,
-                width => SetLineWidths(width),
-                originalWidth * 1.5f,
-                blinkDuration / 2
-            ).SetEase(blinkEase).SetDelay(startDelay)
-        );
-        
-        // Genişliği orijinal değerine geri getir
-        sequence.Join(
-            DOTween.To(
-                () => line1.startWidth,
-                width => SetLineWidths(width),
-                originalWidth,
-                blinkDuration / 2
-            ).SetEase(blinkEase).SetDelay(startDelay + blinkDuration / 2)
-        );
     }
     
     /// <summary>
@@ -381,13 +290,5 @@ public class XDrawer : MonoBehaviour
     private void ResetLineWidths()
     {
         SetLineWidths(lineWidth);
-    }
-    
-    /// <summary>
-    /// X çiziminin devam edip etmediğini kontrol eder
-    /// </summary>
-    public bool IsDrawing()
-    {
-        return isDrawing;
     }
 }

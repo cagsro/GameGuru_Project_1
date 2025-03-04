@@ -16,9 +16,7 @@ public class GridManager : MonoBehaviour
     private int matchCount = 0;
     private PatternDetector patternDetector;
     private GridAnimator gridAnimator;
-    
-    // Komşu hücre yönlerini tanımla
-    private readonly (int x, int y)[] neighborDirections = { (0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1) };
+
     
     // Pattern eşleşme sonuçlarını tutan yapı
     private struct MatchResult
